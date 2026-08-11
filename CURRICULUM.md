@@ -527,20 +527,23 @@ CI4 `DatabaseHandler` 규격 그대로 (14편).
 ### 7-4. 검증에 쓴 파일
 
 ```
-app/Database/Migrations/2026-08-11-000001_CreateUsersTable.php        (ep04)
-                        ...000002_CreateBoardsTable.php              (ep04)
-                        ...000003_CreatePostsTable.php               (ep05)
-                        ...000004_CreateCommentsTable.php            (ep05)
-                        ...000005_CreateAttachmentsTable.php         (ep05)
-                        ...000006_CreateSessionsTable.php            (ep14)
-                        ...000007_AddExtraToPosts.php                (ep18)
-                        ...000008_AddFieldSchemaToBoards.php         (ep19)
-                        ...000009_AddExtraGeneratedColumn.php        (ep21)
-                        ...000010_AddFulltextToPosts.php             (ep26)
-                        ...000011_CreatePostLikesTable.php           (ep27)
-                        ...000012_CreateReportsTable.php             (ep33)
-app/Models/PostModel.php
-app/Commands/VerifyCasts.php     ← php spark verify:casts 로 재현 가능
+_design/migrations/2026-08-11-000001_CreateUsersTable.php     (ep04)
+                   ...000002_CreateBoardsTable.php           (ep04)
+                   ...000003_CreatePostsTable.php            (ep05)
+                   ...000004_CreateCommentsTable.php         (ep05)
+                   ...000005_CreateAttachmentsTable.php      (ep05)
+                   ...000006_CreateSessionsTable.php         (ep14)
+                   ...000007_AddExtraToPosts.php             (ep18)
+                   ...000008_AddFieldSchemaToBoards.php      (ep19)
+                   ...000009_AddExtraGeneratedColumn.php     (ep21)
+                   ...000010_AddFulltextToPosts.php          (ep26)
+                   ...000011_CreatePostLikesTable.php        (ep27)
+                   ...000012_CreateReportsTable.php          (ep33)
+_design/PostModel.php
+_design/VerifyCasts.php     <- php spark verify:casts 로 재현 가능
+
+이 파일들은 `app/` 이 아니라 `_design/` 에 둔다. 회차 태그가 실제 진행 상황과
+어긋나지 않도록, 회차가 진행되면 필요한 것만 `app/` 아래로 복사해 넣는다.
 ```
 
 `VerifyCasts` 커맨드는 강좌에는 넣지 않지만, 스키마를 고칠 때마다 돌려서 회귀를 잡는 용도로 저장소에 남겨둘 만하다.
