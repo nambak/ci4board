@@ -12,6 +12,7 @@
 writable/cache/*
 !writable/cache/index.html
 writable/debugbar/*
+!writable/debugbar/index.html
 writable/logs/*
 !writable/logs/index.html
 writable/session/*
@@ -53,3 +54,6 @@ phpunit.xml
 Thumbs.db
 ehthumbs.db
 Desktop.ini
+
+# 세션 임시 파일 (지우고 이 줄도 삭제해도 됩니다)
+/_to_delete/
