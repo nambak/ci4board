@@ -1,0 +1,55 @@
+#-------------------------
+# CodeIgniter 4
+#-------------------------
+/vendor/
+
+# 환경설정 (절대 커밋 금지)
+.env
+*.env
+!env
+
+# 쓰기 가능 디렉토리
+writable/cache/*
+!writable/cache/index.html
+writable/debugbar/*
+writable/logs/*
+!writable/logs/index.html
+writable/session/*
+!writable/session/index.html
+writable/uploads/*
+!writable/uploads/index.html
+writable/temp/*
+writable/backups/*
+writable/*.db
+writable/*.sqlite
+writable/*.sqlite3
+
+# 테스트
+/tests/coverage*
+.phpunit.result.cache
+phpunit.xml
+!phpunit.dist.xml
+
+# 빌드/도구
+/builds
+.php-cs-fixer.php
+.php_cs.cache
+
+#-------------------------
+# 에디터 / OS
+#-------------------------
+.idea/
+.vscode/
+*.sublime-*
+*.swp
+*.swo
+*~
+
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+Thumbs.db
+ehthumbs.db
+Desktop.ini
