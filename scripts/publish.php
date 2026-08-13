@@ -162,11 +162,47 @@ function publishOne(string $file, string $base, string $token, string $status, b
 
     fwrite(STDERR, "  실패({$code}): {$name}\n");
 
-    foreach ((array) ($res['messages'] ?? ['error' => $res]) as $field => $msg) {
-        fwrite(STDERR, '    ' . $field . ': ' . (is_scalar($msg) ? $msg : json_encode($msg, JSON_UNESCAPED_UNICODE)) . "\n");
+    foreach (explainFailure($res) as $line) {
+        fwrite(STDERR, '    ' . $line . "\n");
     }
 
     return false;
+}
+
+/**
+ * 실패 응답에서 사람이 읽을 줄만 뽑아낸다.
+ *
+ * 처리되지 않은 예외가 나면 CI4 는 개발 환경에서 스택 트레이스까지 담은 거대한
+ * JSON 을 돌려준다. 그걸 그대로 찍으면 터미널이 수천 줄로 덮여 정작 원인 한 줄이
+ * 묻힌다 — 실제로 그렇게 한 번 겪었다.
+ *
+ * @return list<string>
+ */
+function explainFailure(array $res): array
+{
+    // 정상적인 API 오류: {"messages": {"필드": "사유"}}
+    if (isset($res['messages']) && is_array($res['messages'])) {
+        $out = [];
+
+        foreach ($res['messages'] as $field => $msg) {
+            $out[] = $field . ': ' . (is_scalar($msg) ? $msg : json_encode($msg, JSON_UNESCAPED_UNICODE));
+        }
+
+        return $out;
+    }
+
+    // 처리되지 않은 예외: {"title": ..., "message": ..., "file": ..., "line": ...}
+    if (isset($res['message'])) {
+        $out = [(string) $res['message']];
+
+        if (isset($res['file'], $res['line'])) {
+            $out[] = basename((string) $res['file']) . ':' . $res['line'];
+        }
+
+        return $out;
+    }
+
+    return [substr(json_encode($res, JSON_UNESCAPED_UNICODE) ?: '', 0, 300)];
 }
 
 /**
