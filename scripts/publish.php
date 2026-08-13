@@ -13,6 +13,11 @@ declare(strict_types=1);
  *   php scripts/publish.php docs/ep03.md --publish       바로 공개한다
  *   php scripts/publish.php docs/ep03.md --dry-run       보낼 내용만 보여 준다
  *   php scripts/publish.php docs/*.md --publish          여러 편을 한 번에
+ *   php scripts/publish.php docs/ep03.md --publish --yes 확인 절차 없이 (자동화용)
+ *
+ * 안전장치:
+ *   - 실행할 때마다 대상 주소와 상태를 첫 줄에 찍는다.
+ *   - 외부 주소에 공개 상태로 보내려 하면 한 번 묻는다(--yes 로 건너뜀).
  *
  * 환경변수:
  *   BLOG_API_URL     예: https://blog.unwanted.me
@@ -29,16 +34,19 @@ const EXIT_FAIL  = 2;
 function main(array $argv): int
 {
     $args    = array_slice($argv, 1);
-    $files   = [];
-    $publish = false;
-    $dryRun  = false;
-    $status  = null;
+    $files     = [];
+    $publish   = false;
+    $dryRun    = false;
+    $status    = null;
+    $assumeYes = false;
 
     foreach ($args as $arg) {
         if ($arg === '--publish') {
             $publish = true;
         } elseif ($arg === '--dry-run') {
             $dryRun = true;
+        } elseif ($arg === '--yes' || $arg === '-y') {
+            $assumeYes = true;
         } elseif (str_starts_with($arg, '--status=')) {
             $status = substr($arg, 9);
         } elseif (str_starts_with($arg, '--')) {
@@ -51,7 +59,7 @@ function main(array $argv): int
     }
 
     if ($files === []) {
-        fwrite(STDERR, "사용법: php scripts/publish.php <원고.md> [--publish] [--dry-run]\n");
+        fwrite(STDERR, "사용법: php scripts/publish.php <원고.md> [--publish] [--dry-run] [--yes]\n");
 
         return EXIT_USAGE;
     }
@@ -68,21 +76,151 @@ function main(array $argv): int
     }
 
     $status ??= $publish ? 'published' : 'draft';
-    $failed = 0;
 
-    foreach ($files as $file) {
-        if (! is_file($file)) {
-            fwrite(STDERR, "파일이 없습니다: {$file}\n");
-            $failed++;
-            continue;
-        }
+    // 실제로 존재하는 파일만 대상으로 삼는다. 확인 화면에 "3편" 이라고 띄워 놓고
+    // 그중 하나가 오타 경로면 숫자와 결과가 어긋난다.
+    $targets = array_values(array_filter($files, 'is_file'));
 
+    foreach (array_diff($files, $targets) as $missing) {
+        fwrite(STDERR, "파일이 없습니다: {$missing}\n");
+    }
+
+    announceTarget($base, $status, $dryRun);
+
+    if (! $dryRun && ! confirmIfRisky($base, $status, $targets, $assumeYes)) {
+        fwrite(STDERR, "중단했습니다.\n");
+
+        return EXIT_USAGE;
+    }
+
+    $failed = count($files) - count($targets);
+
+    foreach ($targets as $file) {
         if (! publishOne($file, $base, $token, $status, $dryRun)) {
             $failed++;
         }
     }
 
     return $failed === 0 ? EXIT_OK : EXIT_FAIL;
+}
+
+/**
+ * 어디로 보내는지 매번 첫 줄에 찍는다.
+ *
+ * 이 스크립트는 환경변수 하나로 대상이 바뀐다. 터미널을 새로 열거나 다른
+ * 프로젝트를 오가다 보면 BLOG_API_URL 이 무엇인지 기억에 의존하게 되는데,
+ * 그 기억이 틀렸을 때 대가가 크다 — 초안으로 두려던 글이 공개되거나,
+ * 운영에 올리려던 글이 로컬에만 들어간다. 한 줄이면 그 실수가 대부분 사라진다.
+ */
+function announceTarget(string $base, string $status, bool $dryRun): void
+{
+    if ($dryRun) {
+        echo "대상: (dry-run — 전송하지 않음)\n";
+
+        return;
+    }
+
+    echo "대상: {$base}  [" . statusLabel($status) . ']'
+        . (isLocalHost($base) ? '  (로컬)' : '') . "\n";
+}
+
+/** 상태 값의 한국어 라벨. 알 수 없는 값은 그대로 보여 준다(서버가 거부할 것이다). */
+function statusLabel(string $status): string
+{
+    return ['draft' => '임시저장', 'published' => '공개', 'private' => '비공개'][$status] ?? $status;
+}
+
+/**
+ * 외부 주소에 공개 상태로 보내려 하면 한 번 묻는다.
+ *
+ * 되돌리기 힘든 조합은 하나뿐이다 — 원격 + 공개. 로컬은 몇 번을 잘못 올려도
+ * 지우면 그만이고, 임시저장은 원격이어도 독자에게 보이지 않는다. 그래서 그
+ * 한 조합에만 확인을 건다. 모든 실행마다 물으면 금세 습관적으로 엔터를 치게 되고,
+ * 그러면 확인이 아무것도 막지 못한다.
+ *
+ * @param list<string> $files
+ */
+function confirmIfRisky(string $base, string $status, array $files, bool $assumeYes): bool
+{
+    if ($files === [] || isLocalHost($base) || $assumeYes) {
+        return true;
+    }
+
+    // 기본이 draft 여도 원고 front matter 가 status 를 덮어쓸 수 있다(publishOne 이
+    // front matter 를 우선한다). 파일을 먼저 훑어 실제로 공개될 것만 골라낸다 —
+    // 그러지 않으면 "--publish 를 안 붙였으니 안전하다" 는 착각이 생긴다.
+    $public = [];
+
+    foreach ($files as $file) {
+        [$fm]      = parseFrontMatter((string) file_get_contents($file));
+        $effective = trim((string) ($fm['status'] ?? $status));
+
+        if ($effective !== 'draft') {
+            $public[$file] = $effective;
+        }
+    }
+
+    if ($public === []) {
+        return true;
+    }
+
+    $count = count($public);
+
+    fwrite(STDERR, "\n");
+    fwrite(STDERR, "  ⚠  운영 주소에 공개 상태로 발행하려 합니다.\n");
+    fwrite(STDERR, "     대상 : {$base}\n");
+    fwrite(STDERR, "     원고 : {$count}편\n");
+
+    $shown = 0;
+
+    foreach ($public as $file => $effective) {
+        if ($shown++ === 5) {
+            fwrite(STDERR, '            … 외 ' . ($count - 5) . "편\n");
+            break;
+        }
+
+        // 상태를 파일마다 붙인다. --publish 없이 front matter 만으로 공개되는
+        // 경우가 있어서, 한 줄짜리 요약으로는 무엇이 왜 공개되는지 알 수 없다.
+        fwrite(STDERR, '            - ' . basename($file) . '  [' . statusLabel($effective) . "]\n");
+    }
+
+    fwrite(STDERR, "\n");
+
+    // 터미널이 아니면 물어볼 수 없다. 조용히 진행하는 쪽이 더 위험하므로 멈춘다.
+    // 자동화에서 쓰려면 의도를 명시하라는 뜻이다.
+    if (! stream_isatty(STDIN)) {
+        fwrite(STDERR, "  대화형 터미널이 아니라 확인을 받을 수 없습니다. 의도한 실행이면 --yes 를 붙이세요.\n");
+
+        return false;
+    }
+
+    fwrite(STDERR, '  계속하려면 y 를 입력하세요: ');
+
+    $answer = strtolower(trim((string) fgets(STDIN)));
+
+    return $answer === 'y' || $answer === 'yes';
+}
+
+/** 로컬 개발 주소인가. Herd/Valet 의 .test 와 흔한 로컬 호스트명을 본다. */
+function isLocalHost(string $base): bool
+{
+    $host = strtolower((string) parse_url($base, PHP_URL_HOST));
+
+    if ($host === '') {
+        return false;
+    }
+
+    if (in_array($host, ['localhost', '127.0.0.1', '::1', '[::1]'], true)) {
+        return true;
+    }
+
+    foreach (['.test', '.local', '.localhost', '.internal'] as $suffix) {
+        if (str_ends_with($host, $suffix)) {
+            return true;
+        }
+    }
+
+    return false;
 }
 
 function publishOne(string $file, string $base, string $token, string $status, bool $dryRun): bool
