@@ -32,6 +32,14 @@ class PostSeeder extends Seeder
     private const SINCE = '2026-02-24 00:00:00';
     private const UNTIL = '2026-08-23 23:59:59';
 
+    /**
+     * 비회원 글의 수정·삭제용 해시. 원래 비밀번호는 '1234' 다.
+     *
+     * UserSeeder 와 같은 이유로 미리 계산해 박아 둔다 — 매번 계산하면
+     * bcrypt 소금 때문에 실행할 때마다 값이 달라진다(6편 5절).
+     */
+    private const GUEST_PASSWORD_HASH = '$2y$10$95nbXrknPx7zAL1eAogyhuI77/aKM.B0kIH35P904i8b08j1OLPua';
+
     private const TITLES = [
         'notice' => [
             '%s 정기 점검 안내',
@@ -79,8 +87,7 @@ class PostSeeder extends Seeder
             'id',
         );
 
-        // 비회원 글의 수정·삭제용 해시. 200건마다 새로 계산하면 몇 분이 걸린다.
-        $guestHash = password_hash('1234', PASSWORD_DEFAULT);
+        $guestHash = self::GUEST_PASSWORD_HASH;
 
         // 게시판 자리를 섞는다. 섞지 않으면 게시판별로 id 가 뭉쳐서
         // "최근 글" 이 한 게시판에만 몰린다.

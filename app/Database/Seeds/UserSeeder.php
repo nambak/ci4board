@@ -15,6 +15,14 @@ class UserSeeder extends Seeder
     /** 개발용 공통 비밀번호. 운영 데이터에는 절대 쓰지 않는다. */
     private const PASSWORD = 'ci4board!';
 
+    /**
+     * 위 비밀번호를 password_hash() 로 한 번 계산해 박아 둔 값.
+     *
+     * 매번 계산하면 bcrypt 가 소금을 새로 뽑아 실행할 때마다 값이 달라진다.
+     * 다른 컬럼은 시드를 고정해 재현되는데 이 컬럼만 어긋난다(6편 5절).
+     */
+    private const PASSWORD_HASH = '$2y$10$DgGwMXxwUU7yNWdny15fOeODeEHrhmmy2INTAtiKGCjUJQhY5uvN2';
+
     public function run()
     {
         $this->db->table('users')->emptyTable();
@@ -24,9 +32,7 @@ class UserSeeder extends Seeder
 
         $now = date('Y-m-d H:i:s');
 
-        // 해시는 한 번만 계산해 돌려 쓴다. password_hash() 는 일부러 느린
-        // 함수라 열 번만 불러도 체감된다(4편 2절).
-        $hash = password_hash(self::PASSWORD, PASSWORD_DEFAULT);
+        $hash = self::PASSWORD_HASH;
 
         $rows = [
             ['email' => 'admin@example.com', 'username' => 'admin', 'nickname' => '관리자', 'level' => 10, 'role' => 'admin'],
