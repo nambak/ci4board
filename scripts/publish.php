@@ -73,8 +73,11 @@ function main(array $argv): int
         return EXIT_USAGE;
     }
 
-    $base  = rtrim((string) getenv('BLOG_API_URL'), '/');
-    $token = resolveToken();
+    $base = rtrim((string) getenv('BLOG_API_URL'), '/');
+
+    // dry-run 은 아무것도 보내지 않으므로 토큰이 필요 없다. 그런데도 조회하면
+    // 보낼 내용만 보려던 실행이 키체인 접근 창을 띄운다.
+    $token = $dryRun ? '' : resolveToken();
 
     if (! $dryRun && $base === '') {
         fwrite(STDERR, "BLOG_API_URL 을 설정해 주세요.\n");
@@ -89,8 +92,10 @@ function main(array $argv): int
         fwrite(STDERR, "토큰을 찾지 못했습니다.\n");
         fwrite(STDERR, "  키체인에 넣어 두려면:\n");
         fwrite(STDERR, "    security add-generic-password -s {$service} -a \"\$USER\" -w\n");
-        fwrite(STDERR, "  또는 이번 한 번만:\n");
-        fwrite(STDERR, "    export BLOG_API_TOKEN=발급받은_토큰\n");
+        // export BLOG_API_TOKEN=... 를 안내하지 않는다. 이 파일 위쪽에서 명령줄에
+        // 토큰을 쓰지 말라고 해 놓고 에러 메시지로 그 방법을 알려줄 수는 없다.
+        fwrite(STDERR, "  또는 이번 한 번만(셸 히스토리에 남지 않게):\n");
+        fwrite(STDERR, "    read -rs BLOG_API_TOKEN && export BLOG_API_TOKEN\n");
 
         return EXIT_USAGE;
     }
