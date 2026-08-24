@@ -31,7 +31,9 @@ class CreateAttachmentsTable extends Migration
 
             'download_count' => ['type' => 'INT', 'unsigned' => true, 'default' => 0],
             'sort_order'     => ['type' => 'TINYINT', 'unsigned' => true, 'default' => 0],
-            'created_at'     => ['type' => 'DATETIME', 'null' => true],
+            // NOT NULL 이다. 아래 idx_created 가 쓰는 청소 조건
+            // (post_id IS NULL AND created_at < ?) 에서 NULL 행은 영원히 안 걸린다.
+            'created_at'     => ['type' => 'DATETIME'],
         ]);
 
         $this->forge->addPrimaryKey('id');
