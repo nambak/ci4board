@@ -21,7 +21,16 @@ declare(strict_types=1);
  *
  * 환경변수:
  *   BLOG_API_URL     예: https://blog.unwanted.me
- *   BLOG_API_TOKEN   php spark api:token 으로 발급한 토큰
+ *   BLOG_API_TOKEN   php spark api:token 으로 발급한 토큰.
+ *                    비워 두면 macOS 키체인에서 꺼낸다(아래).
+ *
+ * 토큰을 키체인에 둘 때 (권장):
+ *   security add-generic-password -s blog-api-token -a "$USER" -w
+ *   토큰이 셸 히스토리와 프로세스 목록에 남지 않는다.
+ *
+ *   키체인 항목 이름을 바꾸려면:
+ *     BLOG_API_TOKEN_SERVICE   기본값 blog-api-token
+ *     BLOG_API_TOKEN_ACCOUNT   기본값 없음(서비스 이름만으로 찾는다)
  *
  * 같은 원고를 몇 번 보내도 결과가 같다(slug 기준 upsert). 오타를 고쳐 다시
  * 보내는 일이 잦은데 그때마다 글이 늘어나면 쓸 수 없는 도구가 되기 때문이다.
@@ -65,12 +74,23 @@ function main(array $argv): int
     }
 
     $base  = rtrim((string) getenv('BLOG_API_URL'), '/');
-    $token = (string) getenv('BLOG_API_TOKEN');
+    $token = resolveToken();
 
-    if (! $dryRun && ($base === '' || $token === '')) {
-        fwrite(STDERR, "BLOG_API_URL 과 BLOG_API_TOKEN 환경변수를 설정해 주세요.\n");
+    if (! $dryRun && $base === '') {
+        fwrite(STDERR, "BLOG_API_URL 을 설정해 주세요.\n");
         fwrite(STDERR, "  export BLOG_API_URL=https://blog.unwanted.me\n");
-        fwrite(STDERR, "  export BLOG_API_TOKEN=발급받은_토큰\n");
+
+        return EXIT_USAGE;
+    }
+
+    if (! $dryRun && $token === '') {
+        $service = tokenService();
+
+        fwrite(STDERR, "토큰을 찾지 못했습니다.\n");
+        fwrite(STDERR, "  키체인에 넣어 두려면:\n");
+        fwrite(STDERR, "    security add-generic-password -s {$service} -a \"\$USER\" -w\n");
+        fwrite(STDERR, "  또는 이번 한 번만:\n");
+        fwrite(STDERR, "    export BLOG_API_TOKEN=발급받은_토큰\n");
 
         return EXIT_USAGE;
     }
@@ -102,6 +122,50 @@ function main(array $argv): int
     }
 
     return $failed === 0 ? EXIT_OK : EXIT_FAIL;
+}
+
+/** 키체인 항목의 서비스 이름. */
+function tokenService(): string
+{
+    $service = trim((string) getenv('BLOG_API_TOKEN_SERVICE'));
+
+    return $service !== '' ? $service : 'blog-api-token';
+}
+
+/**
+ * 토큰을 구한다. 환경변수가 있으면 그것을, 없으면 macOS 키체인을 본다.
+ *
+ * 환경변수를 먼저 보는 이유는 임시로 다른 토큰을 쓰는 경우가 있어서다 —
+ * 로컬 서버로 시험 발행하거나, 토큰을 새로 발급해 확인해 볼 때.
+ *
+ * 키체인 쪽을 기본으로 두는 이유는 명령줄에 토큰을 쓰지 않기 위해서다.
+ * `BLOG_API_TOKEN=xxx php scripts/publish.php ...` 로 실행하면 그 토큰이
+ * 셸 히스토리 파일에 남고, 실행 중에는 `ps` 로도 보인다. 발행은 자주 하는
+ * 일이라 그런 흔적이 계속 쌓인다.
+ */
+function resolveToken(): string
+{
+    $fromEnv = trim((string) getenv('BLOG_API_TOKEN'));
+
+    if ($fromEnv !== '') {
+        return $fromEnv;
+    }
+
+    if (PHP_OS_FAMILY !== 'Darwin') {
+        return '';
+    }
+
+    $cmd     = 'security find-generic-password -s ' . escapeshellarg(tokenService());
+    $account = trim((string) getenv('BLOG_API_TOKEN_ACCOUNT'));
+
+    if ($account !== '') {
+        $cmd .= ' -a ' . escapeshellarg($account);
+    }
+
+    // -w 는 비밀번호만 찍는다. 항목이 없으면 상태 44 로 끝나고 아무것도 안 나온다.
+    $out = shell_exec($cmd . ' -w 2>/dev/null');
+
+    return $out === null ? '' : trim($out);
 }
 
 /**
